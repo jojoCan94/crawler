@@ -37,36 +37,52 @@ namespace GooglePlayStoreCrawler
                     {
                         string sectionUrl = $"https://play.google.com/store/apps?device={section}";
 
-                        HttpResponseMessage sectionResponse = await httpClient.GetAsync(sectionUrl);
+                        // Variabile per tenere traccia del numero totale di app raccolte per questa sezione
+                        int totalAppsCollectedInSection = 0;
 
-                        if (sectionResponse.IsSuccessStatusCode)
+                        do
                         {
-                            // Leggi il contenuto della pagina e ottieni gli URL delle pagine di applicazioni
-                            string sectionContent = await sectionResponse.Content.ReadAsStringAsync();
-                            HtmlDocument sectionDoc = new HtmlDocument();
-                            sectionDoc.LoadHtml(sectionContent);
-                            var sectionAppLinks = sectionDoc.DocumentNode.SelectNodes("//a[starts-with(@href, '/store/apps/details')]");
+                            HttpResponseMessage sectionResponse = await httpClient.GetAsync(sectionUrl);
 
-                            if (sectionAppLinks != null)
+                            if (sectionResponse.IsSuccessStatusCode)
                             {
-                                Console.WriteLine($"Raccolti {sectionAppLinks.Count} URL di app per la sezione {section}.");
-                                foreach (var linkNode in sectionAppLinks)
+                                // Leggi il contenuto della pagina e ottieni gli URL delle pagine di applicazioni
+                                string sectionContent = await sectionResponse.Content.ReadAsStringAsync();
+                                HtmlDocument sectionDoc = new HtmlDocument();
+                                sectionDoc.LoadHtml(sectionContent);
+                                var sectionAppLinks = sectionDoc.DocumentNode.SelectNodes("//a[starts-with(@href, '/store/apps/details')]");
+
+                                if (sectionAppLinks != null)
                                 {
-                                    string appUrl = "https://play.google.com" + linkNode.GetAttributeValue("href", string.Empty);
-                                    allAppUrls.Add(appUrl);
+                                    foreach (var linkNode in sectionAppLinks)
+                                    {
+                                        string appUrl = "https://play.google.com" + linkNode.GetAttributeValue("href", string.Empty);
+                                        allAppUrls.Add(appUrl);
+                                        totalAppsCollectedInSection++; // Incrementa il conteggio delle app per questa sezione
+                                    }
+                                }
+
+                                // Verifica se ci sono altre pagine di app disponibili
+                                var nextPageLink = sectionDoc.DocumentNode.SelectSingleNode("//a[@class='CwaK9']");
+                                if (nextPageLink != null)
+                                {
+                                    sectionUrl = "https://play.google.com" + nextPageLink.GetAttributeValue("href", string.Empty);
+                                }
+                                else
+                                {
+                                    // Non ci sono altre pagine disponibili, esci dal ciclo
+                                    break;
                                 }
                             }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Errore nella richiesta: {sectionResponse.StatusCode}");
-                        }
+                            else
+                            {
+                                Console.WriteLine($"Errore nella richiesta: {sectionResponse.StatusCode}");
+                                break;
+                            }
 
-                        // raccogli i dati di 200 app per sezione usando la lista allAppUrls
-                        if (allAppUrls.Count >= 1000)
-                        {
-                            break;
-                        }
+                        } while (totalAppsCollectedInSection < 1000); // Imposta il limite desiderato di app per questa sezione
+
+                        Console.WriteLine($"Raccolti {totalAppsCollectedInSection} URL di app per la sezione {section}.");
                     }
 
                     // Interrompi la misurazione del tempo
