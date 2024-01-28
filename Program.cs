@@ -67,7 +67,7 @@ namespace GooglePlayStoreCrawler
                         {
                             int appsToRetrieve = 1000;
                             int appsRetrieved = 0;
-                            List<JObject> batchData = new List<JObject>();
+                            List<Task> tasks = new List<Task>();
 
                             foreach (var linkNode in appLinks)
                             {
@@ -78,28 +78,17 @@ namespace GooglePlayStoreCrawler
                                 string appId = appUrl.Split('=').Last();
 
                                 // Estrai i metadati dell'app
-                                JObject appMetadata = await GetAppMetadataAsync(appUrl);
-                                batchData.Add(appMetadata);
+                                tasks.Add(ProcessAppAsync(appUrl, appId));
 
                                 appsRetrieved++;
-
-                                if(appsRetrieved >= appsToRetrieve)
-                                {
-                                    // Salva i metadati in un file JSON dentro una cartella chiamata "apps"
-                                    string directory = "apps";
-                                    Directory.CreateDirectory(directory);
-
-                                    string fileName = $"{directory}/{appId}.json";
-                                    File.WriteAllText(fileName, appMetadata.ToString());
-
-                                    batchData.Clear();
-                                }
 
                                 if (appsRetrieved >= appsToRetrieve)
                                 {
                                     break;
                                 }
                             }
+
+                            await Task.WhenAll(tasks);
 
                             Console.WriteLine($"Raccolti {appsRetrieved} metadati di app.");
                         }
@@ -122,8 +111,7 @@ namespace GooglePlayStoreCrawler
             }
         }
 
-        // Estrae i metadati di un'app dal suo URL
-        private static async Task<JObject> GetAppMetadataAsync(string appUrl)
+        private static async Task ProcessAppAsync(string appUrl, string appId)
         {
             try
             {
@@ -153,9 +141,9 @@ namespace GooglePlayStoreCrawler
         
                         // Utilizza XPath per trovare gli elementi <h1> con itemprop="name"
                         var titleElement = appHtmlDoc.DocumentNode.SelectSingleNode("//h1[@itemprop='name']");
-
+        
                         var categoryElement = appHtmlDoc.DocumentNode.SelectSingleNode("//div[@itemprop='genre']/span");
-
+        
                         var starsElement = appHtmlDoc.DocumentNode.SelectSingleNode("(//div[@itemprop='starRating']/div)[1]");
                         string starsValue = null;
                         if (starsElement != null)
@@ -171,10 +159,10 @@ namespace GooglePlayStoreCrawler
                                 starsValue = ratingValue.ToString();
                             }
                         }
-
+        
                         // Utilizza XPath per trovare l'elemento <span> con itemprop="contentRating"
                         var contentRatingElement = appHtmlDoc.DocumentNode.SelectSingleNode("//span[@itemprop='contentRating']");
-
+        
                         JObject appData = new JObject
                         {
                             { "Title", titleElement.InnerText },
@@ -182,8 +170,13 @@ namespace GooglePlayStoreCrawler
                             { "Stars", starsValue },
                             { "ContentRating", contentRatingElement.InnerText }
                         };
-
-                        return appData;
+        
+                        // Salva i metadati in un file JSON dentro una cartella chiamata "apps"
+                        string directory = "apps";
+                        Directory.CreateDirectory(directory);
+        
+                        string fileName = $"{directory}/{appId}.json";
+                        File.WriteAllText(fileName, appData.ToString());
                     }
                     else
                     {
@@ -195,11 +188,7 @@ namespace GooglePlayStoreCrawler
             {
                 Console.WriteLine($"Errore durante l'estrazione dei metadati dell'app: {ex.Message}");
             }
-        
-            // In caso di errore o se non riesci a ottenere i metadati, restituisci un JObject vuoto o null
-            return new JObject();
         }
-
 
     }
 }
