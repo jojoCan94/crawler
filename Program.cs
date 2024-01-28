@@ -15,15 +15,15 @@ namespace GooglePlayStoreCrawler
         static HtmlDocument htmlDoc = new HtmlDocument();
         static async Task Main()
         {
-            // URL della pagina web da cui raccogliere i dati
+            // Definizione delle sezioni del Google Play Store da cui raccogliere i dati.
             string[] sections = { "phone", "car", "watch", "chromebook", "tv", "tablet" };
             List<string> allAppUrls = new List<string>();
 
-            // Inizia a misurare il tempo
+            // Avvio della misurazione del tempo totale di esecuzione.
             TimeMeasurement totalTimeMeasurement = new TimeMeasurement();
             totalTimeMeasurement.Start();
 
-            // Creare un'istanza di HttpClient per effettuare la richiesta HTTP
+            // Utilizzo di HttpClient per effettuare le richieste HTTP.
             using (HttpClient httpClient = new HttpClient())
             {
                 TimeMeasurement timeMeasurement = new TimeMeasurement();
@@ -40,6 +40,7 @@ namespace GooglePlayStoreCrawler
                         // Variabile per tenere traccia del numero totale di app raccolte per questa sezione
                         int totalAppsCollectedInSection = 0;
 
+                        // Ciclo per la raccolta degli URL delle app.
                         do
                         {
                             HttpResponseMessage sectionResponse = await httpClient.GetAsync(sectionUrl);
@@ -50,6 +51,8 @@ namespace GooglePlayStoreCrawler
                                 string sectionContent = await sectionResponse.Content.ReadAsStringAsync();
                                 HtmlDocument sectionDoc = new HtmlDocument();
                                 sectionDoc.LoadHtml(sectionContent);
+
+                                // Estrazione degli URL delle app dalla pagina HTML.
                                 var sectionAppLinks = sectionDoc.DocumentNode.SelectNodes("//a[starts-with(@href, '/store/apps/details')]");
 
                                 if (sectionAppLinks != null)
@@ -80,7 +83,7 @@ namespace GooglePlayStoreCrawler
                                 break;
                             }
 
-                        } while (totalAppsCollectedInSection < 1000); // Imposta il limite desiderato di app per questa sezione
+                        } while (totalAppsCollectedInSection < 1000); // limite di 1000 app
 
                         Console.WriteLine($"Raccolti {totalAppsCollectedInSection} URL di app per la sezione {section}.");
                     }
@@ -93,7 +96,7 @@ namespace GooglePlayStoreCrawler
 
                     Console.WriteLine($"Tempo impiegato per la richiesta HTTP: {elapsedTime} ms");
 
-                    // Procedi con il recupero dei dati delle applicazioni
+                    // Estrazione metadati dagli URL delle app
                     List<Task> tasks = new List<Task>();
 
                     foreach (var appUrl in allAppUrls)
@@ -119,46 +122,37 @@ namespace GooglePlayStoreCrawler
             }
         }
 
+        // Metodo per il processamento asincrono di ogni app e l'estrazione dei metadati.
         private static async Task ProcessAppAsync(string appUrl, string appId)
         {
             try
             {
-                // Creare un'istanza di HttpClient per effettuare la richiesta HTTP all'URL dell'app
                 using (HttpClient httpClient = new HttpClient())
                 {
-                    // Effettuare la richiesta GET all'URL dell'app
                     HttpResponseMessage appResponse = await httpClient.GetAsync(appUrl);
 
-                    // Verificare se la richiesta è andata a buon fine
                     if (appResponse.IsSuccessStatusCode)
                     {
                         BufferManager bufferManager = new BufferManager(2000000);
 
                         using (var stream = await appResponse.Content.ReadAsStreamAsync())
                         {
-                            // Leggi il flusso e accumula i dati utilizzando BufferManager
                             await bufferManager.ReadStreamAsync(stream);
                         }
 
-                        // Ottieni il contenuto della risposta HTTP
                         string appHtmlContent = bufferManager.GetBufferedContent();
 
-                        // Crea un oggetto HtmlDocument per analizzare la pagina dell'app
                         HtmlDocument appHtmlDoc = new HtmlDocument();
                         appHtmlDoc.LoadHtml(appHtmlContent);
 
-                        // Utilizza XPath per trovare gli elementi <h1> con itemprop="name"
+                        // Estrazione dei metadati dall'HTML della pagina dell'app.
                         var titleElement = appHtmlDoc.DocumentNode.SelectSingleNode("//h1[@itemprop='name']");
-
                         var categoryElement = appHtmlDoc.DocumentNode.SelectSingleNode("//div[@itemprop='genre']/span");
-
                         var starsElement = appHtmlDoc.DocumentNode.SelectSingleNode("(//div[@itemprop='starRating']/div)[1]");
                         string starsValue = null;
                         if (starsElement != null)
                         {
                             string ratingText = starsElement.InnerText;
-
-                            // Utilizza un'espressione regolare per estrarre il valore numerico
                             System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(ratingText, @"\d+\.\d+");
 
                             if (match.Success)
@@ -167,8 +161,6 @@ namespace GooglePlayStoreCrawler
                                 starsValue = ratingValue.ToString();
                             }
                         }
-
-                        // Utilizza XPath per trovare l'elemento <span> con itemprop="contentRating"
                         var contentRatingElement = appHtmlDoc.DocumentNode.SelectSingleNode("//span[@itemprop='contentRating']");
 
                         JObject appData = new JObject
