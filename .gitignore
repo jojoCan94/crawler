@@ -1,0 +1,8 @@
+# ignore ./apps
+/apps
+
+# ignore /obj
+/obj
+
+# ignore /bin
+/bin
